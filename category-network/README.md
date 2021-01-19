@@ -1,26 +1,26 @@
-# Network Security
+# Segurança de Redes (Network Security)
 
-This folder contains network security labs.
+Este diretório possui os laboratórios relacionados à segurança de redes.
 
-- Packet Sniffing and Spoofing Lab
-- ARP Cache Poisoning Attack Lab
-- IP/ICMP Attacks Lab
+- Laboratório de Sniffing de Pacotes e Spoofing
+- Laboratório do ataque de envenenamento do cache ARP (_ARP Cache Poisoning_)
+- Laboratório de ataques IP/ICMP
 
-- TCP Attacks Labs
-  - TCP Attacks Lab
-  - The Mitnick Attack Lab
+- Laboratórios de ataque TCP
+  - Laboratório de ataques TCP
+  - Laboratório do ataque Mitnick (_The Mitnick attack_)
 
-- DNS Labs
-  - Local DNS Attack Lab
-  - Remote DNS Attack Lab
-  - DNS Rebinding Attack Lab
+- Laboratórios de DNS
+  - Laboratório de ataque de DNS local
+  - Laboratório de ataque de DNS remoto
+  - Laboratório de ataque de DNS rebinding
 
-- Firewall Labs
-  - Firewall Exploration Lab
-  - Firewall Evasion Lab
+- Laboratórios de Firewall
+  - Laboratório de exploração de firewall
+  - Laboratório de evasão de firewall
 
-- VPN Labs
-  - VPN Tunneling Lab
-  - VPN Lab (a comprehensive lab)
+- Laboratórios de VPN
+  - Laboratório de tunelamento de VPN
+  - Laboratório de VPN (conceitual)
 
-- Heartbleed Attack Lab
+- Laboratório do ataque Heartbleed

